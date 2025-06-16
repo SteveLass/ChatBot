@@ -1,4 +1,4 @@
 streamlit
 sentence-transformers
-nltk
 torch
+nltk
