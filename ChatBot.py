@@ -3,9 +3,8 @@ from sentence_transformers import SentenceTransformer, util
 import nltk
 import os
 import tempfile
-import re
 
-# --- GESTION DE NLTK PUNKT POUR SENT_TOKENIZE ---
+# Gestion NLTK 'punkt' dans un dossier temporaire
 nltk_data_dir = os.path.join(tempfile.gettempdir(), "nltk_data")
 nltk.data.path.append(nltk_data_dir)
 
@@ -16,64 +15,19 @@ except LookupError:
 
 from nltk.tokenize import sent_tokenize
 
-# --- CONFIG PAGE STREAMLIT ---
-st.set_page_config(page_title="🤖 Chatbot Histoire Côte d'Ivoire", layout="wide")
-
-st.markdown("""
-    <style>
-        .chat-container {
-            border: 1px solid #CCC;
-            border-radius: 10px;
-            padding: 20px;
-            background-color: #F9F9F9;
-            max-width: 700px;
-            margin: auto;
-        }
-        .bot-message {
-            background-color: #E6F0FA;
-            padding: 10px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            white-space: pre-wrap;
-        }
-        .user-message {
-            background-color: #DCF8C6;
-            padding: 10px;
-            border-radius: 10px;
-            margin-bottom: 10px;
-            text-align: right;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- CHARGEMENT DU MODELE ---
-@st.cache_resource(show_spinner=True)
+# Chargement modèle avec cache Streamlit pour éviter rechargements inutiles
+@st.cache_resource
 def load_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
-model = load_model()
+# Chargement et tokenisation du texte, à appeler dans main()
+def load_and_tokenize_text():
+    with open("Histoire.txt", "r", encoding="utf-8") as file:
+        text = file.read()
+    sentences = sent_tokenize(text)
+    return sentences
 
-# --- CHARGEMENT DU TEXTE ---
-def load_text():
-    try:
-        with open("Histoire.txt", "r", encoding="utf-8") as file:
-            return file.read()
-    except FileNotFoundError:
-        st.error("❌ Fichier 'Histoire.txt' introuvable. Veuillez vérifier son emplacement.")
-        st.stop()
-
-text = load_text()
-
-# --- TOKENISATION ET EMBEDDINGS ---
-sentences = sent_tokenize(text)
-sentence_embeddings = model.encode(sentences, convert_to_tensor=True)
-
-# --- FONCTIONS UTILES ---
-def preprocess_input(text):
-    text = text.strip().lower()
-    text = re.sub(r'[^\w\s]', '', text)  # enlever ponctuation
-    return text
-
+# Suggestions thématiques pour réponses alternatives
 def get_theme_based_suggestions(user_input):
     themes = {
         "histoire": [
@@ -105,8 +59,9 @@ def get_theme_based_suggestions(user_input):
         ]
     }
 
+    user_input_lower = user_input.lower()
     for theme, questions in themes.items():
-        if theme in user_input:
+        if theme in user_input_lower:
             return questions
 
     return [
@@ -115,21 +70,19 @@ def get_theme_based_suggestions(user_input):
         "Quels sont les enjeux actuels du pays ?"
     ]
 
-def get_most_relevant_sentence(user_input, base_threshold=0.4):
+# Fonction principale pour récupérer la réponse la plus pertinente
+def get_most_relevant_sentence(user_input, sentences, sentence_embeddings, model, threshold=0.4):
     query_embedding = model.encode(user_input, convert_to_tensor=True)
     similarities = util.pytorch_cos_sim(query_embedding, sentence_embeddings)[0]
     top_result = int(similarities.argmax())
     best_score = float(similarities[top_result])
-
-    length = len(user_input.split())
-    threshold = max(0.3, min(0.6, base_threshold + 0.01 * (5 - length)))
 
     if best_score < threshold:
         suggestions = get_theme_based_suggestions(user_input)
         return (
             "🤖 Je suis désolé, je n'ai pas trouvé de réponse claire à votre question.\n\n"
             "Voici quelques suggestions que vous pouvez essayer :\n\n" +
-            "\n".join(f"- **{q}**" for q in suggestions)
+            "\n".join(f"• {q}" for q in suggestions)
         )
 
     response = sentences[top_result]
@@ -137,31 +90,65 @@ def get_most_relevant_sentence(user_input, base_threshold=0.4):
         response += " " + sentences[top_result + 1]
     return response
 
-def chatbot(user_input):
-    user_input_clean = preprocess_input(user_input)
-    greetings = ["bonjour", "salut", "hello", "coucou"]
-    if user_input_clean in greetings:
+# Fonction chatbot principale
+def chatbot(user_input, sentences, sentence_embeddings, model):
+    if user_input.lower() in ["bonjour", "salut", "hello"]:
         return "Bonjour ! Je suis votre assistant sur la Côte d'Ivoire. Posez-moi une question !"
-    return get_most_relevant_sentence(user_input_clean)
+    return get_most_relevant_sentence(user_input, sentences, sentence_embeddings, model)
 
-# --- INTERFACE PRINCIPALE ---
+# Interface Streamlit
 def main():
+    st.set_page_config(page_title="🤖 Chatbot Histoire Côte d'Ivoire", layout="wide")
+
+    st.markdown("""
+        <style>
+            .chat-container {
+                border: 1px solid #CCC;
+                border-radius: 10px;
+                padding: 20px;
+                background-color: #F9F9F9;
+                max-width: 700px;
+                margin: auto;
+            }
+            .bot-message {
+                background-color: #E6F0FA;
+                padding: 10px;
+                border-radius: 10px;
+                margin-bottom: 10px;
+            }
+            .user-message {
+                background-color: #DCF8C6;
+                padding: 10px;
+                border-radius: 10px;
+                margin-bottom: 10px;
+                text-align: right;
+            }
+            .icon {
+                font-weight: bold;
+                margin-right: 8px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.title("Chatbot interactif sur l'histoire de la Côte d'Ivoire")
     st.markdown("Posez une question sur l'histoire, la politique, la culture, l'économie ou le sport en Côte d'Ivoire.")
+
+    # Chargement du modèle
+    model = load_model()
+
+    # Chargement et découpage du texte
+    sentences = load_and_tokenize_text()
+    sentence_embeddings = model.encode(sentences, convert_to_tensor=True)
 
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    if st.button("🔄 Réinitialiser la conversation"):
-        st.session_state.messages = []
-        st.experimental_rerun()
-
-    with st.form("chat_form", clear_on_submit=True):
+    with st.form("chat_form"):
         user_input = st.text_input("Votre question :")
         submitted = st.form_submit_button("Envoyer")
 
     if submitted and user_input:
-        response = chatbot(user_input)
+        response = chatbot(user_input, sentences, sentence_embeddings, model)
         st.session_state.messages.append(("user", user_input))
         st.session_state.messages.append(("bot", response))
 
