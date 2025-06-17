@@ -1,0 +1,6 @@
+Bonjour, je suis un assistant virtuel. Je peux répondre à vos questions sur l'histoire, la technologie, ou la vie quotidienne.
+Félix Houphouët-Boigny fut le premier président de la Côte d'Ivoire après l'indépendance en 1960.
+La Côte d'Ivoire est un pays situé en Afrique de l’Ouest avec Abidjan comme capitale économique.
+L'intelligence artificielle est un domaine de l'informatique qui vise à créer des machines capables de simuler l’intelligence humaine.
+Streamlit est un framework Python utilisé pour créer des applications web interactives.
+La reconnaissance vocale permet de convertir la parole en texte grâce à des modèles acoustiques.
